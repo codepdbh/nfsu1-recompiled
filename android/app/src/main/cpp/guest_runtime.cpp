@@ -319,6 +319,7 @@ uint32_t d3dToken{};
 void direct3DCreate(){ret(createGuestD3D9(arg(0)),1);}
 void freeD3DGuest(uint32_t address){heaps->free(GuestHeaps::process,address);}
 void serviceGuestSound();
+void saveChangedOptions();  // after callGuest
 void d3dDispatch(){
     // The arguments are read in place on the guest stack (one bounds check)
     // instead of copying 128 bytes for each D3D9 call.
@@ -331,7 +332,7 @@ void d3dDispatch(){
     try{result=dispatchGuestD3D9(token,args,&count);}catch(...){
         NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU1","D3D9 guest caller=%08x stack=%08x token=%08x self=%08x",g_cur_func,g_esp,token,args[0]);throw;}
     if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};}
-    if(token==0x7e002110u){nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
+    if(token==0x7e002110u){nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();saveChangedOptions();}
     if(token==0x7e002110u&&result==0){
         static FramePacer pacer;
         auto now=std::chrono::steady_clock::now();
@@ -354,6 +355,29 @@ uint32_t callGuest(uint32_t va,const uint32_t* args,size_t count,uint32_t cleanu
 // frame and a std::vector per call cost a malloc/free pair.
 inline uint32_t callGuest(uint32_t va,std::initializer_list<uint32_t> args,uint32_t cleanup=0,bool threadStart=false){return callGuest(va,args.begin(),args.size(),cleanup,threadStart);}
 inline uint32_t callGuest(uint32_t va,const std::vector<uint32_t>& args,uint32_t cleanup=0,bool threadStart=false){return callGuest(va,args.data(),args.size(),cleanup,threadStart);}
+// Underground keeps its options (graphics detail, audio, controls) in the
+// profile's .opt file and writes it only when the game is saved, so options
+// changed in the menu were lost when the app was closed, which on Android is
+// how players leave. Speed.exe serializes the live options at 0x7588C4
+// (0x2E5 bytes) in 0x41E200; once they change while a profile is loaded
+// (name at 0x736230) and stay unchanged for 2 s, run the game's own profile
+// config save (0x41C7A0: .opt, then .cfg) as its save would.
+void saveChangedOptions(){
+    constexpr uint32_t options=0x7588C4u,optionsBytes=0x2E5u,profileName=0x736230u;
+    static int64_t nextCheck=0,changedAt=0;static std::string profile;static std::vector<uint8_t> saved,pending;
+    int64_t now=steadyMs();if(now<nextCheck)return;nextCheck=now+1000;
+    if(!memory->readable(options,optionsBytes)||!memory->readable(profileName,32))return;
+    std::string name=guestString(profileName);
+    auto current=static_cast<const uint8_t*>(ptr(options,optionsBytes));
+    if(name.empty()){profile.clear();saved.clear();return;}
+    if(name!=profile||saved.empty()){profile=name;saved.assign(current,current+optionsBytes);changedAt=0;return;}
+    if(std::equal(saved.begin(),saved.end(),current)){changedAt=0;return;}
+    if(!changedAt||!std::equal(pending.begin(),pending.end(),current)){pending.assign(current,current+optionsBytes);changedAt=now;return;}
+    if(now-changedAt<2000)return;
+    callGuest(0x41C7A0u,{});
+    saved=pending;changedAt=0;
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU1","Options changed in the menu: saved to the %s profile",profile.c_str());
+}
 #include "guest_threads.inc"
 #include "guest_files.inc"
 #include "guest_kernel.inc"
