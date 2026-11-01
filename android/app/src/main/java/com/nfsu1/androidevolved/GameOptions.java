@@ -9,14 +9,22 @@ import android.content.SharedPreferences;
  */
 final class GameOptions {
     static final class Option {
-        final String key, title, defaultValue;
-        final String[] values, labels;
-        Option(String key, String title, String defaultValue, String[] values, String[] labels) {
-            this.key = key; this.title = title; this.defaultValue = defaultValue; this.values = values; this.labels = labels;
+        final String key, defaultValue;
+        final String[] values;
+        final int titleRes;
+        final int[] labelRes;
+        Option(String key, int titleRes, String defaultValue, String[] values, int[] labelRes) {
+            this.key = key; this.titleRes = titleRes; this.defaultValue = defaultValue; this.values = values; this.labelRes = labelRes;
         }
-        String label(String value) {
-            for (int i = 0; i < values.length; i++) if (values[i].equals(value)) return labels[i];
+        String title(Context context) { return context.getString(titleRes); }
+        String label(Context context, String value) {
+            for (int i = 0; i < values.length; i++) if (values[i].equals(value)) return context.getString(labelRes[i]);
             return value;
+        }
+        String[] labels(Context context) {
+            String[] labels = new String[labelRes.length];
+            for (int i = 0; i < labelRes.length; i++) labels[i] = context.getString(labelRes[i]);
+            return labels;
         }
     }
 
@@ -24,31 +32,32 @@ final class GameOptions {
             TEXTURES = "textures", MINIMAP = "minimap", LANGUAGE = "language", GAMEPAD = "gamepad";
 
     static final Option[] ALL = {
-            new Option(RESOLUTION, "Resolución interna", "75",
+            new Option(RESOLUTION, R.string.option_resolution_title, "75",
                     new String[] {"100", "75", "50", "720"},
-                    new String[] {"Nativa · máxima calidad", "75% · equilibrada", "50% · máximo rendimiento",
-                            "1280×720 · 16:9"}),
-            new Option(FPS, "Límite de FPS", "120",
+                    new int[] {R.string.option_resolution_native, R.string.option_resolution_75,
+                            R.string.option_resolution_50, R.string.option_resolution_720}),
+            new Option(FPS, R.string.option_fps_title, "120",
                     new String[] {"30", "60", "90", "120", "0"},
-                    new String[] {"30 FPS · ahorra batería", "60 FPS", "90 FPS", "120 FPS", "Sin límite"}),
-            new Option(WIDESCREEN, "Pantalla panorámica", "on",
+                    new int[] {R.string.option_fps_30, R.string.option_fps_60, R.string.option_fps_90,
+                            R.string.option_fps_120, R.string.option_fps_unlimited}),
+            new Option(WIDESCREEN, R.string.option_widescreen_title, "on",
                     new String[] {"on", "off"},
-                    new String[] {"HUD y cámara corregidos", "Original 4:3 estirado"}),
-            new Option(MINIMAP, "Minimapa", "top",
+                    new int[] {R.string.option_widescreen_on, R.string.option_widescreen_off}),
+            new Option(MINIMAP, R.string.option_minimap_title, "top",
                     new String[] {"top", "bottom"},
-                    new String[] {"Arriba a la izquierda", "Abajo a la izquierda (original)"}),
-            new Option(LATENCY, "Sincronía CPU/GPU", "2",
+                    new int[] {R.string.option_minimap_top, R.string.option_minimap_bottom}),
+            new Option(LATENCY, R.string.option_latency_title, "2",
                     new String[] {"2", "1"},
-                    new String[] {"Rendimiento · CPU y GPU en paralelo", "Baja latencia · menos FPS"}),
-            new Option(TEXTURES, "Texturas comprimidas", "auto",
+                    new int[] {R.string.option_latency_2, R.string.option_latency_1}),
+            new Option(TEXTURES, R.string.option_textures_title, "auto",
                     new String[] {"auto", "cpu"},
-                    new String[] {"Automático · GPU si las soporta", "Convertir en CPU · compatibilidad"}),
+                    new int[] {R.string.option_textures_auto, R.string.option_textures_cpu}),
             // As keyboard: RT accelerates, LT brakes, A handbrake, B nitrous, the
             // layout players expect. The game's own joystick defaults put
             // accelerate/brake on B/A (issue #45).
-            new Option(GAMEPAD, "Mando Bluetooth/USB", "keys",
+            new Option(GAMEPAD, R.string.option_gamepad_title, "keys",
                     new String[] {"keys", "directinput"},
-                    new String[] {"Como teclado · RT acelera, LT frena", "Joystick DirectInput · mapeo del juego"}),
+                    new int[] {R.string.option_gamepad_keys, R.string.option_gamepad_directinput}),
     };
 
     private static final String PREFS = "nfsu1_game";
