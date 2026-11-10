@@ -48,7 +48,7 @@ final class Diagnostics {
                 int reason = exit.getReason();
                 if (reason == ApplicationExitInfo.REASON_CRASH || reason == ApplicationExitInfo.REASON_CRASH_NATIVE
                         || reason == ApplicationExitInfo.REASON_ANR) {
-                    return (reason == ApplicationExitInfo.REASON_ANR ? "El juego dejó de responder" : "El juego se cerró inesperadamente")
+                    return context.getString(reason == ApplicationExitInfo.REASON_ANR ? R.string.crash_reason_anr : R.string.crash_reason_unexpected)
                             + (exit.getDescription() == null ? "" : " (" + exit.getDescription() + ")");
                 }
             }
@@ -62,17 +62,19 @@ final class Diagnostics {
 
     static String summary(Context context) {
         GpuDrivers.Driver driver = GpuDrivers.selected(context);
-        return "NFSU1 Android Evolved " + ReleaseUpdates.installed(context)
-                + "\nAPK ABI: " + (Process.is64Bit() ? "arm64-v8a" : "armeabi-v7a")
-                + "\nTeléfono: " + Build.MANUFACTURER + " " + Build.MODEL
-                + "\nAndroid: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
-                + "\nSoC: " + (Build.VERSION.SDK_INT >= 31 ? Build.SOC_MANUFACTURER + " " + Build.SOC_MODEL : Build.HARDWARE)
-                + "\nDriver Vulkan: " + (driver == null ? "Sistema" : driver.name) + "\n";
+        return context.getString(R.string.app_title_prefix) + " " + ReleaseUpdates.installed(context)
+                + "\n" + context.getString(R.string.diagnostics_summary_apk_abi, Process.is64Bit() ? "arm64-v8a" : "armeabi-v7a")
+                + "\n" + context.getString(R.string.diagnostics_summary_phone, Build.MANUFACTURER, Build.MODEL)
+                + "\n" + context.getString(R.string.diagnostics_summary_android, Build.VERSION.RELEASE, Build.VERSION.SDK_INT)
+                + "\n" + context.getString(R.string.diagnostics_summary_soc,
+                        Build.VERSION.SDK_INT >= 31 ? Build.SOC_MANUFACTURER + " " + Build.SOC_MODEL : Build.HARDWARE)
+                + "\n" + context.getString(R.string.diagnostics_summary_vulkan_driver,
+                        driver == null ? context.getString(R.string.driver_system_short) : driver.name) + "\n";
     }
 
     static File createReport(Context context) throws Exception {
         File directory = new File(context.getCacheDir(), "reports");
-        if (!directory.isDirectory() && !directory.mkdirs()) throw new IOException("No se pudo crear el informe.");
+        if (!directory.isDirectory() && !directory.mkdirs()) throw new IOException(context.getString(R.string.diagnostics_create_report_failed));
         File[] old = directory.listFiles();
         if (old != null) for (File file : old)
             if (file.isFile() && file.lastModified() < System.currentTimeMillis() - TimeUnit.DAYS.toMillis(7)) file.delete();
@@ -80,8 +82,9 @@ final class Diagnostics {
         File report = new File(directory, "NFSU1-diagnostico-" + date + ".zip");
         try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(report))) {
             StringBuilder info = new StringBuilder(summary(context));
-            info.append("Fecha: ").append(new Date()).append("\nABI: ").append(Arrays.toString(Build.SUPPORTED_ABIS))
-                    .append("\n\nOpciones:\n");
+            info.append(context.getString(R.string.diagnostics_date, new Date().toString()))
+                    .append("\n").append(context.getString(R.string.diagnostics_abi, Arrays.toString(Build.SUPPORTED_ABIS)))
+                    .append("\n\n").append(context.getString(R.string.diagnostics_options)).append('\n');
             for (GameOptions.Option option : GameOptions.ALL)
                 info.append(option.key).append('=').append(GameOptions.get(context, option.key)).append('\n');
             info.append("language=").append(GameOptions.language(context)).append('\n');
@@ -168,15 +171,15 @@ final class Diagnostics {
         }
         if (key.size() > 35) key = key.subList(key.size() - 35, key.size());
         if (tail.size() > 60) tail = tail.subList(tail.size() - 60, tail.size());
-        String title = "[Android] " + Build.MODEL + ": " + (crash == null ? "" : "cierre inesperado");
+        String title = "[Android] " + Build.MODEL + ": " + (crash == null ? "" : context.getString(R.string.issue_title_unexpected_close));
         while (true) {
-            String body = "### Qué ocurrió\n" + (crash == null ? "" : crash + "\n") + "\n### Pasos para reproducirlo\n\n"
-                    + "### Dispositivo\n" + summary(context)
-                    + "\n### Registro completo\nGuardado en el móvil en **" + zipLocation
-                    + "**. Si puedes, adjúntalo aquí: arrástralo o toca \"Paste, drop, or click to add files\".\n"
-                    + "\n### Resumen técnico\n```\n" + String.join("\n", key)
-                    + (lastFrame == null ? "" : "\nÚltimo fotograma: " + lastFrame)
-                    + "\n--- últimas líneas del juego ---\n" + String.join("\n", tail) + "\n```\n";
+            String body = context.getString(R.string.issue_what_happened) + "\n" + (crash == null ? "" : crash + "\n")
+                    + "\n" + context.getString(R.string.issue_steps_to_reproduce) + "\n\n"
+                    + context.getString(R.string.issue_device) + "\n" + summary(context)
+                    + "\n" + context.getString(R.string.issue_full_log, zipLocation) + "\n"
+                    + "\n" + context.getString(R.string.issue_technical_summary) + "\n```\n" + String.join("\n", key)
+                    + (lastFrame == null ? "" : "\n" + context.getString(R.string.issue_last_frame, lastFrame))
+                    + "\n" + context.getString(R.string.issue_last_game_lines) + "\n" + String.join("\n", tail) + "\n```\n";
             Uri uri = Uri.parse(ISSUES).buildUpon().appendQueryParameter("title", title).appendQueryParameter("body", body).build();
             if (uri.toString().length() <= URL_BUDGET || (tail.isEmpty() && key.size() <= 1)) return uri;
             if (!tail.isEmpty()) tail = tail.subList(Math.min(tail.size(), 5), tail.size());
@@ -192,17 +195,17 @@ final class Diagnostics {
         values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/NFSU1");
         android.content.ContentResolver resolver = context.getContentResolver();
         Uri target = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-        if (target == null) throw new IOException("No se pudo crear el archivo en Descargas.");
+        if (target == null) throw new IOException(context.getString(R.string.diagnostics_create_download_failed));
         try (InputStream input = new java.io.FileInputStream(report);
              java.io.OutputStream output = resolver.openOutputStream(target, "w")) {
-            if (output == null) throw new IOException("No se pudo escribir en Descargas.");
+            if (output == null) throw new IOException(context.getString(R.string.diagnostics_write_download_failed));
             byte[] buffer = new byte[65536];
             for (int n; (n = input.read(buffer)) != -1;) output.write(buffer, 0, n);
         } catch (IOException error) {
             resolver.delete(target, null, null);
             throw error;
         }
-        return "Descargas/NFSU1/" + report.getName();
+        return context.getString(R.string.diagnostics_download_location, report.getName());
     }
 
     private static void add(ZipOutputStream zip, String name, byte[] data) throws IOException {
@@ -261,7 +264,7 @@ final class Diagnostics {
                                     readLimited(trace));
                             traceAdded = true;
                         }
-                    } catch (IOException error) { info.append("Traza no disponible: ").append(error).append('\n'); }
+                    } catch (IOException error) { info.append(context.getString(R.string.diagnostics_trace_unavailable, error.toString())).append('\n'); }
                 }
             }
         } catch (RuntimeException error) { info.append(error); }
