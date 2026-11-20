@@ -707,7 +707,7 @@ extern "C" void recomp_dump_trace(const char*) {}
 // resolution menu is not mapped yet, so the game keeps its own modes and DXVK scales.)
 
 std::string connectGuestRuntime(const char* executable) {
-    stayOnPerformanceCores();
+    stayOnPerformanceCores(true);  // the guest main thread
     std::unique_lock<MachineMutex> guard(machine);machineLease=&guard;
     if (memory) return "Runtime guest ya inicializado";
     State original; original.save();
